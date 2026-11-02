@@ -131,7 +131,7 @@ export default function LandingPage() {
 
             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <Link
-                to="/login"
+                to="/demo-credentials"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -149,7 +149,7 @@ export default function LandingPage() {
                   transition: 'all var(--transition-fast)',
                 }}
               >
-                <span>Explore Demo Platform</span>
+                <span>Explore Demo Portals</span>
                 <ArrowRight size={18} />
               </Link>
 
@@ -396,7 +396,7 @@ export default function LandingPage() {
           {/* Direct Login Callout */}
           <div style={{ marginTop: '2.5rem', textAlign: 'center' }}>
             <Link
-              to="/login"
+              to="/demo-credentials"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -408,7 +408,7 @@ export default function LandingPage() {
             >
               <span>Evaluating CODEBUFFET?</span>
               <span style={{ color: 'var(--color-blue-bright)', fontWeight: 700, textDecoration: 'underline' }}>
-                Launch Demo Access →
+                Explore Demo Portals →
               </span>
             </Link>
           </div>

@@ -627,24 +627,46 @@ def seed_initial_data():
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, b)
 
-    # 3. Seed Mentoring Interventions (Distributed across all 3 mentors)
+    # 3. Seed Mentoring Interventions (Distributed across mentors & life-cycle stages)
     interventions_to_seed = [
-        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Complete LeetCode Top 50 DSA practice set", "SKILL_GAP", "Prof. Rajesh Kumar", "OPEN", "Oct 15, 2026"),
-        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Submit Microservices Architecture case study on LMS", "ACADEMIC", "Prof. Rajesh Kumar", "OPEN", "Oct 22, 2026"),
-        ("STU-2024-001", "Rajesh Kumar", "Computer Science & Engineering", "Urgent Attendance Counseling & Arrears Remedial", "ATTENDANCE", "Prof. Rajesh Kumar", "OPEN", "Oct 12, 2026"),
-        ("STU-2024-019", "Sneha Reddy", "Electronics & Communication", "Analog Circuit Design Simulation & Viva Practice", "ACADEMIC", "Dr. Sunita Sharma", "OPEN", "Oct 18, 2026"),
-        ("STU-2024-067", "Pooja Hegde", "Electrical & Electronics", "Power Systems Assignment & Attendance Catchup", "ATTENDANCE", "Dr. Sunita Sharma", "OPEN", "Oct 20, 2026"),
-        ("STU-2024-054", "Rohan Das", "Mechanical Engineering", "Special Faculty Mentorship for Core Arrear Subjects", "ACADEMIC", "Prof. K. Murthy", "OPEN", "Oct 14, 2026"),
-        ("STU-2024-093", "Aditya Rao", "Civil Engineering", "Structural Analysis Practice & Placement Readiness Review", "PLACEMENT", "Prof. K. Murthy", "OPEN", "Oct 25, 2026"),
+        # Today's deliverables (Demo date: Oct 31, 2026)
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Submit System Design Architecture Whitepaper", "ACADEMIC", "Prof. Rajesh Kumar", "OPEN", "Oct 31, 2026 5:00 PM", "HIGH"),
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Complete Cloud Native Microservices Quiz", "SKILL_GAP", "Dr. R. Kumar", "OPEN", "Oct 31, 2026 11:59 PM", "MEDIUM"),
+        # Overdue deliverables (Yesterday, Day-before, and older)
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Review Mock Technical Interview Feedback", "PLACEMENT", "Vikram Malhotra", "OPEN", "Oct 30, 2026", "HIGH"),
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Submit Compiler Design Lab Manual 4", "ACADEMIC", "Prof. Rajesh Kumar", "OPEN", "Oct 29, 2026", "MEDIUM"),
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Complete LeetCode Top 50 DSA practice set", "SKILL_GAP", "Prof. Rajesh Kumar", "OPEN", "Oct 15, 2026", "HIGH"),
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Submit Microservices Architecture case study on LMS", "ACADEMIC", "Prof. Rajesh Kumar", "OPEN", "Oct 22, 2026", "MEDIUM"),
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Attend Corporate Mock Technical Interview Session", "PLACEMENT", "Vikram Malhotra", "OPEN", "Oct 28, 2026", "HIGH"),
+        # Upcoming deliverables
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Corporate Mock Technical Interview (DSA & System Design)", "PLACEMENT", "Aarush Dev (TPO)", "OPEN", "Nov 12, 2026", "HIGH"),
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Advanced Competitive Hackathon & Honors Project Track", "PROJECT", "Prof. Rajesh Kumar", "OPEN", "Nov 25, 2026", "LOW"),
+        # Completed deliverables
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Attend Academic Progress Review with Faculty Mentor", "MENTORING", "Prof. Rajesh Kumar", "COMPLETED", "Oct 10, 2026", "MEDIUM"),
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Verify University Placement Portal Profile & Resume Upload", "PLACEMENT", "Vikram Malhotra", "COMPLETED", "Oct 20, 2026", "HIGH"),
+        # Ongoing / No Due Date
+        ("STU-2024-042", "Aarav Sharma", "Computer Science & Engineering", "Weekly Peer Study Group on Advanced Distributed Algorithms", "GENERAL", "Prof. Rajesh Kumar", "OPEN", "Ongoing", "LOW"),
+        # Other students
+        ("STU-2024-001", "Rajesh Kumar", "Computer Science & Engineering", "Urgent Attendance Counseling & Arrears Remedial", "ATTENDANCE", "Prof. Rajesh Kumar", "OPEN", "Oct 12, 2026", "HIGH"),
+        ("STU-2024-019", "Sneha Reddy", "Electronics & Communication", "Analog Circuit Design Simulation & Viva Practice", "ACADEMIC", "Dr. Sunita Sharma", "OPEN", "Oct 18, 2026", "MEDIUM"),
+        ("STU-2024-067", "Pooja Hegde", "Electrical & Electronics", "Power Systems Assignment & Attendance Catchup", "ATTENDANCE", "Dr. Sunita Sharma", "OPEN", "Oct 20, 2026", "MEDIUM"),
+        ("STU-2024-054", "Rohan Das", "Mechanical Engineering", "Special Faculty Mentorship for Core Arrear Subjects", "ACADEMIC", "Prof. K. Murthy", "OPEN", "Oct 14, 2026", "MEDIUM"),
+        ("STU-2024-093", "Aditya Rao", "Civil Engineering", "Structural Analysis Practice & Placement Readiness Review", "PLACEMENT", "Prof. K. Murthy", "OPEN", "Oct 25, 2026", "MEDIUM"),
     ]
 
     for item in interventions_to_seed:
-        cursor.execute("SELECT id FROM interventions WHERE student_roll_no = ? AND title = ?", (item[0], item[3]))
+        cursor.execute("SELECT id FROM interventions WHERE LOWER(student_roll_no) = LOWER(?) AND title = ?", (item[0], item[3]))
         if not cursor.fetchone():
-            cursor.execute("""
-            INSERT INTO interventions (student_roll_no, student_name, department, title, category, assigned_mentor, status, due_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, item)
+            if len(item) == 9:
+                cursor.execute("""
+                INSERT INTO interventions (student_roll_no, student_name, department, title, category, assigned_mentor, status, due_date, priority)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, item)
+            else:
+                cursor.execute("""
+                INSERT INTO interventions (student_roll_no, student_name, department, title, category, assigned_mentor, status, due_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, item)
 
     # 4. Seed Historical Telemetry (Real Semester Progression for Verified Students)
     historical_telemetry = [

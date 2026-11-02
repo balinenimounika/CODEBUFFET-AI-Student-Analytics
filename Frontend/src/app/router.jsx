@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from '../pages/public/LandingPage';
 import LoginPage from '../pages/public/LoginPage';
+import DemoCredentialsPage from '../pages/public/DemoCredentialsPage';
 
 import CampusDashboard from '../pages/institution/CampusDashboard';
 import MentorDashboard from '../pages/institution/MentorDashboard';
@@ -80,17 +81,20 @@ function RootIndexRoute() {
     return <Navigate to={getRoleRedirect(user.role)} replace />;
   }
 
-  return <LoginPage />;
+  return <LandingPage />;
 }
 
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* Root Route: Shows Login by default; redirects if authenticated */}
+      {/* Root Route: Shows LandingPage for visitors; redirects to role dashboard if authenticated */}
       <Route path="/" element={<RootIndexRoute />} />
+      <Route path="/platform" element={<LandingPage />} />
+      <Route path="/demo-credentials" element={<DemoCredentialsPage />} />
+      <Route path="/credentials" element={<Navigate to="/demo-credentials" replace />} />
+      <Route path="/demo-portals" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<Navigate to="/login" replace />} />
-      <Route path="/platform" element={<LandingPage />} />
 
       {/* Admin Institution Analytics Portal */}
       <Route

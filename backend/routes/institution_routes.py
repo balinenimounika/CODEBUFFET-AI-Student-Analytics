@@ -326,8 +326,198 @@ async def get_success_trends(
     ]
 
 
+@router.get("/students/telemetry")
+def get_digital_twin_telemetry(
+    search: Optional[str] = None,
+    risk_band: Optional[str] = None,
+    academic_risk: Optional[str] = None,
+    placement_risk: Optional[str] = None,
+    department: Optional[str] = None,
+    mentor: Optional[str] = None,
+    record_type: Optional[str] = None,
+    page: Optional[int] = None,
+    page_size: Optional[int] = 10000,
+    all: Optional[bool] = True,
+    current_user: dict = Depends(require_roles(["admin", "mentor", "tpo"]))
+):
+    """
+    High-performance telemetry endpoint for Student Success Digital Twin.
+    Returns complete dataset of up to 50,008 students with valid attendance and CGPA,
+    along with precalculated risk aggregations, quadrant distributions, and data completeness metrics.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    base_query = "FROM students WHERE 1=1"
+    params = []
+
+    if mentor and mentor.strip().lower() not in ("all", ""):
+        if "vihaan" in mentor.lower() or "rajesh" in mentor.lower():
+            base_query += " AND (LOWER(assigned_mentor) LIKE ? OR LOWER(assigned_mentor) LIKE ?)"
+            params.extend(["%rajesh%", "%vihaan%"])
+        else:
+            base_query += " AND LOWER(assigned_mentor) LIKE ?"
+            params.append(f"%{mentor.strip().lower()}%")
+
+    if record_type and record_type.strip().lower() not in ("all", ""):
+        base_query += " AND record_type = ?"
+        params.append(record_type.strip().lower())
+
+    if risk_band and risk_band.strip().upper() not in ("ALL", ""):
+        rb = risk_band.strip().upper()
+        base_query += " AND (academic_risk_band = ? OR placement_risk_band = ?)"
+        params.extend([rb, rb])
+
+    if academic_risk and academic_risk.strip().upper() not in ("ALL", ""):
+        base_query += " AND academic_risk_band = ?"
+        params.append(academic_risk.strip().upper())
+
+    if placement_risk and placement_risk.strip().upper() not in ("ALL", ""):
+        base_query += " AND placement_risk_band = ?"
+        params.append(placement_risk.strip().upper())
+
+    if department and department.strip().upper() not in ("ALL", ""):
+        dept_raw = department.strip().lower()
+        dept_abbr_map = {
+            "cse": "computer science",
+            "ece": "electronics",
+            "it": "information technology",
+            "mech": "mechanical",
+            "civil": "civil",
+            "eee": "electrical",
+            "aiml": "artificial intelligence",
+            "ds": "data science",
+        }
+        search_dept = dept_abbr_map.get(dept_raw, dept_raw)
+        base_query += " AND (LOWER(department) LIKE ? OR LOWER(department) LIKE ?)"
+        params.extend([f"%{dept_raw}%", f"%{search_dept}%"])
+
+    if search and search.strip():
+        s = f"%{search.strip().lower()}%"
+        base_query += " AND (LOWER(full_name) LIKE ? OR LOWER(roll_no) LIKE ? OR LOWER(department) LIKE ?)"
+        params.extend([s, s, s])
+
+    # Compute comprehensive database-level aggregations
+    agg_sql = f"""
+        SELECT 
+            COUNT(*) as total_count,
+            SUM(CASE WHEN (academic_risk_band = 'HIGH' OR placement_risk_band = 'HIGH') THEN 1 ELSE 0 END) as high_risk_count,
+            SUM(CASE WHEN (academic_risk_band != 'HIGH' AND placement_risk_band != 'HIGH' AND (academic_risk_band = 'MEDIUM' OR placement_risk_band = 'MEDIUM')) THEN 1 ELSE 0 END) as medium_risk_count,
+            SUM(CASE WHEN (academic_risk_band = 'LOW' AND placement_risk_band = 'LOW') THEN 1 ELSE 0 END) as low_risk_count,
+            SUM(CASE WHEN record_type = 'verified_profile' THEN 1 ELSE 0 END) as verified_count,
+            SUM(CASE WHEN record_type = 'anonymous_cohort' THEN 1 ELSE 0 END) as benchmark_count,
+            SUM(CASE WHEN overall_attendance_pct IS NOT NULL AND cgpa IS NOT NULL AND overall_attendance_pct >= 0 AND cgpa >= 0 THEN 1 ELSE 0 END) as eligible_count,
+            SUM(CASE WHEN overall_attendance_pct IS NULL OR cgpa IS NULL THEN 1 ELSE 0 END) as excluded_count,
+            SUM(CASE WHEN cgpa >= 7.0 AND overall_attendance_pct >= 75.0 THEN 1 ELSE 0 END) as quad_top_right,
+            SUM(CASE WHEN cgpa >= 7.0 AND overall_attendance_pct < 75.0 THEN 1 ELSE 0 END) as quad_top_left,
+            SUM(CASE WHEN cgpa < 7.0 AND overall_attendance_pct >= 75.0 THEN 1 ELSE 0 END) as quad_bottom_right,
+            SUM(CASE WHEN cgpa < 7.0 AND overall_attendance_pct < 75.0 THEN 1 ELSE 0 END) as quad_bottom_left,
+            AVG(overall_attendance_pct) as avg_attendance,
+            AVG(cgpa) as avg_cgpa,
+            AVG(success_score) as avg_success_score
+        {base_query}
+    """
+    cursor.execute(agg_sql, params)
+    agg = dict(cursor.fetchone() or {})
+
+    tot = agg.get("total_count") or 0
+    lo = agg.get("low_risk_count") or 0
+    med = agg.get("medium_risk_count") or 0
+    hi = agg.get("high_risk_count") or 0
+    el = agg.get("eligible_count") or 0
+    ex = agg.get("excluded_count") or 0
+
+    aggregations = {
+        "total_database_records": 50008,
+        "total_matching": tot,
+        "total_eligible": el,
+        "excluded_count": ex,
+        "low_risk_count": lo,
+        "low_risk_pct": round((lo / el * 100), 1) if el > 0 else 0.0,
+        "medium_risk_count": med,
+        "medium_risk_pct": round((med / el * 100), 1) if el > 0 else 0.0,
+        "high_risk_count": hi,
+        "high_risk_pct": round((hi / el * 100), 1) if el > 0 else 0.0,
+        "verified_count": agg.get("verified_count") or 0,
+        "benchmark_count": agg.get("benchmark_count") or 0,
+        "quadrants": {
+            "top_right": agg.get("quad_top_right") or 0,
+            "top_left": agg.get("quad_top_left") or 0,
+            "bottom_right": agg.get("quad_bottom_right") or 0,
+            "bottom_left": agg.get("quad_bottom_left") or 0,
+        },
+        "averages": {
+            "attendance": round(agg.get("avg_attendance") or 75.0, 1),
+            "cgpa": round(agg.get("avg_cgpa") or 7.0, 2),
+            "success_score": round(agg.get("avg_success_score") or 65.0, 1),
+        }
+    }
+
+    # Query student telemetry rows
+    order_clause = "ORDER BY (CASE WHEN record_type = 'verified_profile' THEN 0 ELSE 1 END), id ASC"
+    select_fields = """
+        roll_no, full_name, department, overall_attendance_pct, cgpa,
+        success_score, backlogs, academic_risk_band, placement_risk_band,
+        assigned_mentor, record_type, source_provenance, data_completeness, avatar_url
+    """
+
+    if page is not None and not all:
+        p = max(1, page)
+        ps = max(1, min(50000, page_size or 10000))
+        offset = (p - 1) * ps
+        data_sql = f"SELECT {select_fields} {base_query} {order_clause} LIMIT {ps} OFFSET {offset}"
+        cursor.execute(data_sql, params)
+    else:
+        data_sql = f"SELECT {select_fields} {base_query} {order_clause}"
+        cursor.execute(data_sql, params)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    items = []
+    for r in rows:
+        acad_band = r["academic_risk_band"] or "LOW"
+        plac_band = r["placement_risk_band"] or "LOW"
+        risk_cat = "HIGH" if (acad_band == "HIGH" or plac_band == "HIGH") else ("MEDIUM" if (acad_band == "MEDIUM" or plac_band == "MEDIUM") else "LOW")
+        items.append({
+            "id": r["roll_no"],
+            "roll_no": r["roll_no"],
+            "name": r["full_name"],
+            "department": r["department"],
+            "attendance": r["overall_attendance_pct"],
+            "cgpa": r["cgpa"],
+            "successScore": r["success_score"],
+            "backlogs": r["backlogs"],
+            "academicRisk": acad_band,
+            "placementRisk": plac_band,
+            "riskCategory": risk_cat,
+            "assignedMentor": r["assigned_mentor"] or "Prof. Rajesh Kumar",
+            "recordType": r["record_type"] or "anonymous_cohort",
+            "sourceProvenance": r["source_provenance"] or "Kaggle Benchmark Dataset",
+            "dataCompleteness": r["data_completeness"] or 94.1,
+            "avatar": r["avatar_url"],
+        })
+
+    resp = {
+        "items": items,
+        "total": tot,
+        "eligible": el,
+        "excluded": ex,
+        "aggregations": aggregations,
+    }
+
+    if page is not None and not all:
+        ps = max(1, min(50000, page_size or 10000))
+        resp["page"] = page
+        resp["page_size"] = ps
+        resp["total_pages"] = math.ceil(tot / ps) if tot > 0 else 1
+        resp["has_more"] = (page * ps) < tot
+
+    return resp
+
+
 @router.get("/students")
-async def get_students(
+def get_students(
     search: Optional[str] = None,
     risk_band: Optional[str] = None,
     academic_risk: Optional[str] = None,
@@ -357,20 +547,16 @@ async def get_students(
     cursor = conn.cursor()
 
     params = []
-    if not mentor:
-        # 50 Selected Students Cohort: Strictly restrict main dashboard to the 50 selected student records
-        # Preserves all remaining 50,008 records in the SQLite database safely without deletion.
-        base_query = "FROM students WHERE id IN (SELECT id FROM students ORDER BY (CASE WHEN record_type = 'verified_profile' THEN 0 ELSE 1 END), id ASC LIMIT 50)"
-    else:
-        # Mentor specific query: retrieve genuine students assigned to this mentor without being constrained
-        # by the arbitrary 50 IDs of the main executive campus dashboard overview.
+    base_query = "FROM students WHERE 1=1"
+
+    if mentor and mentor.strip().lower() not in ("all", ""):
+        # Mentor specific query: retrieve genuine students assigned to this mentor
         # Pre-fetch intervention rolls for this mentor to avoid slow correlated subquery evaluation per row
         interv_p = ["%rajesh%", "%vihaan%"] if ("vihaan" in mentor.lower() or "rajesh" in mentor.lower()) else [f"%{mentor.strip().lower()}%"]
         interv_w = "(LOWER(assigned_mentor) LIKE ? OR LOWER(assigned_mentor) LIKE ?)" if len(interv_p) == 2 else "LOWER(assigned_mentor) LIKE ?"
         cursor.execute(f"SELECT student_roll_no FROM interventions WHERE {interv_w}", interv_p)
         interv_rolls = [r[0] for r in cursor.fetchall() if r[0]]
 
-        base_query = "FROM students WHERE 1=1"
         if "vihaan" in mentor.lower() or "rajesh" in mentor.lower():
             if interv_rolls:
                 pl = ",".join("?" for _ in interv_rolls)
@@ -389,19 +575,15 @@ async def get_students(
                 base_query += " AND LOWER(assigned_mentor) LIKE ?"
                 params.extend([m])
 
-        # Filter by record_type only if explicitly requested (e.g. 'verified_profile' or 'anonymous_cohort')
-        if record_type and record_type.strip().lower() not in ("all", ""):
-            base_query += " AND record_type = ?"
-            params.append(record_type.strip().lower())
+    # Filter by record_type only if explicitly requested (e.g. 'verified_profile' or 'anonymous_cohort')
+    if record_type and record_type.strip().lower() not in ("all", ""):
+        base_query += " AND record_type = ?"
+        params.append(record_type.strip().lower())
 
     if search:
         s = f"%{search.strip().lower()}%"
         base_query += " AND (LOWER(full_name) LIKE ? OR LOWER(roll_no) LIKE ? OR LOWER(department) LIKE ?)"
         params.extend([s, s, s])
-
-    if not mentor and record_type and record_type.strip().lower() != "all":
-        base_query += " AND record_type = ?"
-        params.append(record_type.strip().lower())
 
     if risk_band:
         base_query += " AND (academic_risk_band = ? OR placement_risk_band = ?)"
@@ -563,12 +745,11 @@ async def get_students(
 
     if page is not None:
         p = max(1, page)
-        ps = max(1, min(50, page_size or 50))
+        ps = max(1, min(100, page_size or 25))
         offset = (p - 1) * ps
         final_query = f"SELECT * {base_query} {order_clause} LIMIT {ps} OFFSET {offset}"
     else:
-        # Dashboard receives and displays only the selected 50 student records (capped strictly at 50 for main campus overview)
-        effective_limit = min(limit, 50) if (limit and limit > 0 and not mentor) else (min(limit, 100) if (limit and limit > 0) else (50 if not mentor else 100))
+        effective_limit = limit if (limit and limit > 0) else 50
         final_query = f"SELECT * {base_query} {order_clause} LIMIT {effective_limit}"
 
     cursor.execute(final_query, params)
@@ -633,7 +814,7 @@ async def get_students(
     ]
 
     if page is not None:
-        ps = max(1, min(50, page_size or 50))
+        ps = max(1, min(100, page_size or 25))
         resp = {
             "items": student_list,
             "total": total_matching,

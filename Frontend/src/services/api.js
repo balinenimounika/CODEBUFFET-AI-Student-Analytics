@@ -122,6 +122,25 @@ export const api = {
     return request(`/api/institution/students${qs}`);
   },
 
+  getDigitalTwinTelemetry: async (options = {}) => {
+    let paramsObj = typeof options === 'string' ? { search: options } : (options || {});
+    const params = new URLSearchParams();
+    if (paramsObj.search) params.append('search', paramsObj.search);
+    if (paramsObj.riskBand && paramsObj.riskBand !== 'ALL') params.append('risk_band', paramsObj.riskBand);
+    if (paramsObj.academicRisk && paramsObj.academicRisk !== 'ALL') params.append('academic_risk', paramsObj.academicRisk);
+    if (paramsObj.placementRisk && paramsObj.placementRisk !== 'ALL') params.append('placement_risk', paramsObj.placementRisk);
+    if (paramsObj.department && paramsObj.department !== 'ALL') params.append('department', paramsObj.department);
+    if (paramsObj.mentor && paramsObj.mentor !== 'ALL') params.append('mentor', paramsObj.mentor);
+    if (paramsObj.recordType && paramsObj.recordType !== 'all') params.append('record_type', paramsObj.recordType);
+    if (paramsObj.page) params.append('page', paramsObj.page);
+    if (paramsObj.pageSize || paramsObj.page_size) params.append('page_size', paramsObj.pageSize || paramsObj.page_size);
+    if (paramsObj.all !== undefined) params.append('all', paramsObj.all);
+    else params.append('all', 'true');
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/institution/students/telemetry${qs}`);
+  },
+
   getMentors: () => request('/api/institution/mentors'),
   getMentorSummary: (mentor) => {
     const qs = mentor ? `?mentor=${encodeURIComponent(mentor)}` : '';

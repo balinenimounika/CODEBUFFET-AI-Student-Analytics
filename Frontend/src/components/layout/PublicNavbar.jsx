@@ -13,7 +13,7 @@ export default function PublicNavbar() {
     if (isAuthenticated && currentUser) {
       navigate(currentUser.portal === 'student' ? '/student/dashboard' : '/institution/dashboard');
     } else {
-      navigate('/login');
+      navigate('/demo-credentials');
     }
   };
 

@@ -5,14 +5,12 @@ import {
   GraduationCap,
   Briefcase,
   Award,
-  ShieldCheck,
   Sparkles,
   AlertCircle,
   Loader2,
   ArrowRight,
-  KeyRound,
+  ArrowLeft,
   CheckCircle2,
-  Info,
 } from 'lucide-react';
 import BrandLogo from '../../components/common/BrandLogo';
 import { useAuth } from '../../context/AuthContext';
@@ -78,17 +76,15 @@ const DEMO_ROLES = [
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { loginWithDemo, authLoading, backendStatus } = useAuth();
+  const { loginWithDemo, authLoading } = useAuth();
 
   const [selectedDemoKey, setSelectedDemoKey] = useState('admin');
   const [error, setError] = useState('');
   const [launchingRole, setLaunchingRole] = useState(null);
-  const [showInfoModal, setShowInfoModal] = useState(false);
 
-  // Execute Demo Login
+  // Execute Demo Login using existing backend authentication endpoint
   const handleLaunchDemo = async (roleKey) => {
     const targetKey = roleKey || selectedDemoKey;
-    const targetRole = DEMO_ROLES.find((d) => d.key === targetKey) || DEMO_ROLES[0];
     setError('');
     setLaunchingRole(targetKey);
 
@@ -131,9 +127,9 @@ export default function LoginPage() {
           ========================================================================= */}
       <div
         style={{
-          flex: '1 1 50%',
+          flex: '1 1 52%',
           maxWidth: '680px',
-          padding: '2.5rem 3.5rem',
+          padding: '2.25rem 3.25rem',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
@@ -145,36 +141,38 @@ export default function LoginPage() {
         {/* Top Header: Nav controls */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
           <Link
-            to="/platform"
+            to="/demo-credentials"
             style={{
               color: 'var(--color-navy, #0F172A)',
               textDecoration: 'none',
               fontWeight: 600,
-              fontSize: '0.88rem',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            ← Platform Overview
-          </Link>
-          <button
-            onClick={() => setShowInfoModal(true)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--color-text-secondary, #64748B)',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '5px',
-              cursor: 'pointer',
               fontSize: '0.86rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              backgroundColor: '#F1F5F9',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#E2E8F0')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#F1F5F9')}
+          >
+            <ArrowLeft size={14} />
+            <span>Demo Credentials</span>
+          </Link>
+
+          <Link
+            to="/platform"
+            style={{
+              color: '#64748B',
+              textDecoration: 'none',
               fontWeight: 500,
+              fontSize: '0.84rem',
             }}
           >
-            <Info size={15} />
-            <span>Demo Guide</span>
-          </button>
+            Platform Overview →
+          </Link>
         </div>
 
         {/* Center Main Content */}
@@ -187,7 +185,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Eyebrow & Live Backend Badge */}
+          {/* Eyebrow Label */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
             <div
               style={{
@@ -203,23 +201,6 @@ export default function LoginPage() {
             >
               <Sparkles size={14} />
               <span>DEMO EVALUATION PORTAL</span>
-            </div>
-            <div
-              style={{
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                padding: '2px 8px',
-                borderRadius: '9999px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                backgroundColor: backendStatus === 'connected' ? '#ECFDF5' : '#FFFBEB',
-                color: backendStatus === 'connected' ? '#059669' : '#D97706',
-                border: `1px solid ${backendStatus === 'connected' ? '#A7F3D0' : '#FDE68A'}`,
-              }}
-            >
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: backendStatus === 'connected' ? '#10B981' : '#F59E0B' }} />
-              <span>{backendStatus === 'connected' ? 'FastAPI Backend Online' : 'Checking Backend...'}</span>
             </div>
           </div>
 
@@ -275,6 +256,7 @@ export default function LoginPage() {
                 gap: '10px',
                 marginBottom: '14px',
               }}
+              className="role-grid"
             >
               {DEMO_ROLES.map((r) => {
                 const Icon = r.icon;
@@ -458,11 +440,6 @@ export default function LoginPage() {
               )}
             </button>
           </div>
-
-          {/* Quick Evaluator Note */}
-          <div style={{ textAlign: 'center', fontSize: '0.76rem', color: '#64748B', lineHeight: 1.4 }}>
-            <span>Evaluator demo environment — authenticates with seeded institutional dataset.</span>
-          </div>
         </div>
 
         {/* Bottom Footer Info */}
@@ -478,24 +455,26 @@ export default function LoginPage() {
             color: '#94A3B8',
           }}
         >
-          <div>© 2026 CODEBUFFET • Demo Evaluation Access</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <ShieldCheck size={14} style={{ color: '#10B981' }} />
-            <span>Live Seed Authentication Active</span>
+          <div>© 2026 CODEBUFFET</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Link to="/demo-credentials" style={{ color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}>
+              View Demo Credentials
+            </Link>
           </div>
         </div>
       </div>
 
       {/* =========================================================================
-          RIGHT SIDE: CAMPUS VISUAL WITH WAVE & METRICS OVERLAY
+          RIGHT SIDE: CAMPUS PHOTOGRAPH BACKGROUND & SPLIT-SCREEN VISUAL
           ========================================================================= */}
       <div
         style={{
-          flex: '1 1 50%',
+          flex: '1 1 48%',
           position: 'relative',
-          backgroundImage: `url('/images/signin-bg.png')`,
+          backgroundImage: `linear-gradient(to top, rgba(15, 23, 42, 0.85) 0%, rgba(15, 23, 42, 0.20) 60%, rgba(15, 23, 42, 0.35) 100%), url('/assets/images/campus_day_login.jpg')`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'flex-end',
@@ -517,6 +496,7 @@ export default function LoginPage() {
           }}
           viewBox="0 0 100 1000"
           preserveAspectRatio="none"
+          className="login-wave-divider"
         >
           <path
             d="M 0,0 
@@ -527,16 +507,6 @@ export default function LoginPage() {
           />
         </svg>
 
-        {/* Dark Vignette Overlay */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'linear-gradient(to top, rgba(15, 23, 42, 0.85) 0%, rgba(15, 23, 42, 0.20) 60%, rgba(15, 23, 42, 0.40) 100%)',
-            pointerEvents: 'none',
-          }}
-        />
-
         {/* Floating Glass Metric Card */}
         <div
           style={{
@@ -544,7 +514,7 @@ export default function LoginPage() {
             zIndex: 4,
             maxWidth: '380px',
             marginLeft: 'auto',
-            backgroundColor: 'rgba(255, 255, 255, 0.92)',
+            backgroundColor: 'rgba(255, 255, 255, 0.94)',
             backdropFilter: 'blur(16px)',
             WebkitBackdropFilter: 'blur(16px)',
             borderRadius: '16px',
@@ -610,97 +580,54 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* =========================================================================
-          DEMO OVERVIEW MODAL
-          ========================================================================= */}
-      {showInfoModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-            backdropFilter: 'blur(6px)',
-            zIndex: 100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1.5rem',
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: '16px',
-              maxWidth: '480px',
-              width: '100%',
-              padding: '2rem',
-              boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
-              border: '1px solid #E2E8F0',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1rem' }}>
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '10px',
-                  backgroundColor: '#EFF6FF',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#2563EB',
-                }}
-              >
-                <KeyRound size={22} />
-              </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#0F172A' }}>
-                  Demo Evaluation Access
-                </h3>
-                <span style={{ fontSize: '0.78rem', color: '#64748B' }}>CODEBUFFET Platform Evaluation</span>
-              </div>
-            </div>
-
-            <p style={{ fontSize: '0.86rem', color: '#334155', lineHeight: 1.55, marginBottom: '1rem' }}>
-              This platform runs in <strong>Demo-Only Mode</strong> for hackathon and jury evaluation. Each demo role is backed by genuine backend database records and real analytics pipelines.
-            </p>
-
-            <div
-              style={{
-                backgroundColor: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                borderRadius: '8px',
-                padding: '0.85rem 1rem',
-                fontSize: '0.82rem',
-                color: '#475569',
-                marginBottom: '1.5rem',
-              }}
-            >
-              <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '6px' }}>Supported Demo Roles:</div>
-              <div>• <strong>Institution Officer</strong> (Dr. R. Kumar): Executive campus oversight</div>
-              <div style={{ marginTop: '3px' }}>• <strong>Faculty Mentor</strong> (Prof. Rajesh Kumar): Mentorship & student caseload</div>
-              <div style={{ marginTop: '3px' }}>• <strong>Placement Officer</strong> (Vikram Malhotra): Job matching & placement pipeline</div>
-              <div style={{ marginTop: '3px' }}>• <strong>Student</strong> (Aarav Sharma): Personal telemetry & What-If simulator</div>
-            </div>
-
-            <button
-              onClick={() => setShowInfoModal(false)}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                borderRadius: '8px',
-                backgroundColor: '#2563EB',
-                color: '#FFFFFF',
-                fontWeight: 600,
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
+      {/* Responsive Styles for Split-Screen Layout */}
+      <style>{`
+        .login-container {
+          display: flex;
+          flex-direction: row;
+          min-height: 100vh;
+        }
+        .login-form-wrapper {
+          flex: 1 1 52%;
+          max-width: 680px;
+          padding: 2.25rem 3.25rem;
+          overflow-y: auto;
+        }
+        .login-visual-panel {
+          flex: 1 1 48%;
+          position: relative;
+          min-height: 100vh;
+        }
+        .login-wave-divider {
+          display: block;
+        }
+        @media (max-width: 1024px) {
+          .login-container {
+            flex-direction: column;
+          }
+          .login-form-wrapper {
+            max-width: 100%;
+            padding: 2rem 1.5rem;
+            flex: 1 1 auto;
+          }
+          .login-visual-panel {
+            flex: 1 1 auto;
+            min-height: 320px;
+            padding: 2rem 1.5rem;
+          }
+          .login-wave-divider {
+            display: none;
+          }
+        }
+        @media (max-width: 640px) {
+          .login-form-wrapper {
+            padding: 1.5rem 1rem;
+          }
+          .role-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

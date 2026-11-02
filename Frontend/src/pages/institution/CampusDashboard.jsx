@@ -64,8 +64,7 @@ import {
   DISTRIBUTION_DATA,
   DEPARTMENT_SCORES,
 } from '../../data/mockStudents';
-import Campus3DExperience from '../../components/landing/Campus3DExperience';
-import StudentSpatial3DAnalytics from '../../components/analytics/StudentSpatial3DAnalytics';
+import StudentDigitalTwin from '../../components/analytics/StudentDigitalTwin';
 import api from '../../services/api';
 
 /**
@@ -92,7 +91,7 @@ export default function CampusDashboard() {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
   // Digital Twin Sub-Mode ('spatial-3d' | 'coordinate-3d' | 'matrix-2d')
-  const [digitalTwinMode, setDigitalTwinMode] = useState('coordinate-3d');
+  const [digitalTwinMode, setDigitalTwinMode] = useState('scatter-2d');
 
   // Roster Switcher: 'all' | 'verified_profile' | 'anonymous_cohort'
   const [recordTypeFilter, setRecordTypeFilter] = useState('all');
@@ -111,13 +110,18 @@ export default function CampusDashboard() {
   const [pageSize, setPageSize] = useState(25);
   const [sortBy, setSortBy] = useState('success_score');
   const [sortOrder, setSortOrder] = useState('desc');
-  const [totalRecords, setTotalRecords] = useState(50);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(50008);
+  const [totalPages, setTotalPages] = useState(2001);
   const [rosterCounts, setRosterCounts] = useState({
     verified_profiles: 8,
-    anonymous_cohort: 42,
-    total_records: 50,
+    anonymous_cohort: 50000,
+    total_records: 50008,
   });
+
+  // Digital Twin Telemetry State (Complete 50,008 Student Records & Database Aggregations)
+  const [digitalTwinStudents, setDigitalTwinStudents] = useState([]);
+  const [digitalTwinAggregations, setDigitalTwinAggregations] = useState(null);
+  const [isLoadingDigitalTwin, setIsLoadingDigitalTwin] = useState(false);
 
   // Live Backend Data States
   const [summaryData, setSummaryData] = useState({
@@ -357,7 +361,53 @@ export default function CampusDashboard() {
     }
   }, [activeNav, approvalTab]);
 
-    // 2. Query Selected 50 Students Directly (Direct Cohort Display • Zero Pagination)
+  // 2A. Load Complete 50,008 Student Telemetry for Student Success Digital Twin
+  useEffect(() => {
+    let isMounted = true;
+    async function loadDigitalTwinTelemetry() {
+      setIsLoadingDigitalTwin(true);
+      try {
+        const res = await api.getDigitalTwinTelemetry({
+          mentor: mentorFilter !== 'ALL' ? mentorFilter : undefined,
+          recordType: recordTypeFilter,
+          department: deptFilter !== 'ALL' ? deptFilter : undefined,
+          riskBand: riskFilter !== 'ALL' ? riskFilter : undefined,
+          academicRisk: academicRiskFilter !== 'ALL' ? academicRiskFilter : undefined,
+          placementRisk: placementRiskFilter !== 'ALL' ? placementRiskFilter : undefined,
+          search: searchQuery,
+          all: true,
+        });
+
+        if (isMounted && res) {
+          if (res.items) {
+            setDigitalTwinStudents(res.items);
+          }
+          if (res.aggregations) {
+            setDigitalTwinAggregations(res.aggregations);
+          }
+        }
+      } catch (err) {
+        console.warn('Digital twin telemetry fetch failed:', err);
+      } finally {
+        if (isMounted) setIsLoadingDigitalTwin(false);
+      }
+    }
+
+    loadDigitalTwinTelemetry();
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    mentorFilter,
+    recordTypeFilter,
+    deptFilter,
+    riskFilter,
+    academicRiskFilter,
+    placementRiskFilter,
+    searchQuery,
+  ]);
+
+  // 2B. Query Student Directory Table (Server-side Paginated Roster across 50,008 Records)
   useEffect(() => {
     let isMounted = true;
     async function fetchStudents() {
@@ -374,35 +424,26 @@ export default function CampusDashboard() {
           attendanceRange: attendanceRangeFilter !== 'ALL' ? attendanceRangeFilter : undefined,
           sortBy,
           sortOrder,
-          limit: 50,
+          page: currentPage,
+          pageSize,
         });
 
         if (isMounted) {
           if (res && res.items) {
             setCohortStudents(res.items);
             setTotalRecords(res.total || res.items.length);
-            setTotalPages(1);
+            setTotalPages(res.total_pages || Math.ceil((res.total || res.items.length) / pageSize) || 1);
             if (res.counts) {
-              setRosterCounts((prev) => ({
-                ...prev,
-                verified_profiles: res.counts.verified_profiles ?? prev.verified_profiles,
-                anonymous_cohort: res.counts.anonymous_cohort ?? prev.anonymous_cohort,
-                total_records: res.counts.total_records ?? prev.total_records,
-              }));
+              setRosterCounts({
+                verified_profiles: res.counts.verified_profiles ?? 8,
+                anonymous_cohort: res.counts.anonymous_cohort ?? 50000,
+                total_records: res.counts.total_records ?? (res.total || 50008),
+              });
             }
           } else if (Array.isArray(res)) {
             setCohortStudents(res);
             setTotalRecords(res.length);
-            setTotalPages(1);
-            if (recordTypeFilter === 'all' && !searchQuery && deptFilter === 'ALL' && riskFilter === 'ALL' && academicRiskFilter === 'ALL' && placementRiskFilter === 'ALL' && mentorFilter === 'ALL' && attendanceRangeFilter === 'ALL') {
-              const verified = res.filter((s) => s.recordType === 'verified_profile').length;
-              const benchmark = res.filter((s) => s.recordType !== 'verified_profile').length;
-              setRosterCounts({
-                verified_profiles: verified,
-                anonymous_cohort: benchmark,
-                total_records: res.length,
-              });
-            }
+            setTotalPages(Math.ceil(res.length / pageSize) || 1);
           }
         }
       } catch (err) {
@@ -436,6 +477,8 @@ export default function CampusDashboard() {
     attendanceRangeFilter,
     sortBy,
     sortOrder,
+    currentPage,
+    pageSize,
   ]);
 
   // 3. Run Live Cohort Simulation
@@ -899,7 +942,7 @@ export default function CampusDashboard() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
                 <a href="#digital-twin-section" style={{ textDecoration: 'none', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Compass size={13} style={{ color: '#1E6BFF' }} />
-                  <span>3D Digital Twin</span>
+                  <span>Student Digital Twin</span>
                 </a>
                 <a href="#decoupled-risk-section" style={{ textDecoration: 'none', color: '#64748B', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Layers size={13} style={{ color: '#8B5CF6' }} />
@@ -1004,7 +1047,7 @@ export default function CampusDashboard() {
               {/* Roster Switcher Selector */}
               <div style={{ display: 'flex', backgroundColor: isDarkMode ? '#1E293B' : '#F1F5F9', borderRadius: '8px', padding: '3px' }}>
                 <button
-                  onClick={() => setRecordTypeFilter('all')}
+                  onClick={() => { setRecordTypeFilter('all'); setCurrentPage(1); }}
                   style={{
                     padding: '5px 12px',
                     borderRadius: '6px',
@@ -1016,10 +1059,10 @@ export default function CampusDashboard() {
                     color: recordTypeFilter === 'all' ? '#FFFFFF' : '#64748B',
                   }}
                 >
-                  All 50 Selected ({rosterCounts.total_records ?? 50})
+                  All Students ({(rosterCounts.total_records || 50008).toLocaleString()})
                 </button>
                 <button
-                  onClick={() => setRecordTypeFilter('verified_profile')}
+                  onClick={() => { setRecordTypeFilter('verified_profile'); setCurrentPage(1); }}
                   style={{
                     padding: '5px 12px',
                     borderRadius: '6px',
@@ -1031,10 +1074,10 @@ export default function CampusDashboard() {
                     color: recordTypeFilter === 'verified_profile' ? '#FFFFFF' : '#64748B',
                   }}
                 >
-                  Verified Profiles ({rosterCounts.verified_profiles ?? 8})
+                  Verified Profiles ({(rosterCounts.verified_profiles || 8).toLocaleString()})
                 </button>
                 <button
-                  onClick={() => setRecordTypeFilter('anonymous_cohort')}
+                  onClick={() => { setRecordTypeFilter('anonymous_cohort'); setCurrentPage(1); }}
                   style={{
                     padding: '5px 12px',
                     borderRadius: '6px',
@@ -1046,7 +1089,7 @@ export default function CampusDashboard() {
                     color: recordTypeFilter === 'anonymous_cohort' ? '#FFFFFF' : '#64748B',
                   }}
                 >
-                  Benchmark Cohort ({rosterCounts.anonymous_cohort ?? 42})
+                  Benchmark Cohort ({(rosterCounts.anonymous_cohort || 50000).toLocaleString()})
                 </button>
               </div>
             </div>
@@ -1959,7 +2002,7 @@ export default function CampusDashboard() {
                 marginBottom: '1.75rem',
               }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Compass size={20} style={{ color: '#1E6BFF' }} />
@@ -1968,55 +2011,34 @@ export default function CampusDashboard() {
                     </h2>
                   </div>
                   <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
-                    Spatial telemetry visualization mapping student risk cohorts across campus hotspots and 3D coordinate space.
+                    Telemetry visualization mapping student performance, attendance, and risk classification across 2D visual dimensions.
                   </span>
-                </div>
-
-                <div style={{ display: 'flex', backgroundColor: isDarkMode ? '#0F172A' : '#F1F5F9', borderRadius: '8px', padding: '3px' }}>
-                  <button
-                    onClick={() => setDigitalTwinMode('coordinate-3d')}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      fontSize: '0.76rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      backgroundColor: digitalTwinMode === 'coordinate-3d' ? '#1E6BFF' : 'transparent',
-                      color: digitalTwinMode === 'coordinate-3d' ? '#FFFFFF' : '#64748B',
-                    }}
-                  >
-                    3D Coordinate Space
-                  </button>
-                  <button
-                    onClick={() => setDigitalTwinMode('spatial-3d')}
-                    style={{
-                      padding: '5px 12px',
-                      borderRadius: '6px',
-                      border: 'none',
-                      fontSize: '0.76rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      backgroundColor: digitalTwinMode === 'spatial-3d' ? '#1E6BFF' : 'transparent',
-                      color: digitalTwinMode === 'spatial-3d' ? '#FFFFFF' : '#64748B',
-                    }}
-                  >
-                    3D Campus Hotspots
-                  </button>
                 </div>
               </div>
 
-              {digitalTwinMode === 'coordinate-3d' ? (
-                <StudentSpatial3DAnalytics
-                  students={cohortStudents}
-                  isDarkMode={isDarkMode}
-                  onStudentSelect={(st) => setSelectedStudent(st)}
-                />
-              ) : (
-                <div style={{ height: '480px', borderRadius: '14px', overflow: 'hidden' }}>
-                  <Campus3DExperience onExploreClick={() => setDigitalTwinMode('coordinate-3d')} />
-                </div>
-              )}
+              <StudentDigitalTwin
+                students={digitalTwinStudents.length > 0 ? digitalTwinStudents : cohortStudents}
+                aggregations={digitalTwinAggregations}
+                totalDatabaseRecords={summaryData.total_students || 50008}
+                isLoading={isLoadingDigitalTwin}
+                mode={digitalTwinMode}
+                onModeChange={setDigitalTwinMode}
+                isDarkMode={isDarkMode}
+                onStudentSelect={(st) => setSelectedStudent(st)}
+                activeRiskFilter={riskFilter}
+                onRiskFilterChange={(risk) => {
+                  setRiskFilter(risk);
+                  setCurrentPage(1);
+                }}
+                currentMentor={mentorFilter}
+                currentCohort={recordTypeFilter}
+                onResetFilters={() => {
+                  setRiskFilter('ALL');
+                  setAcademicRiskFilter('ALL');
+                  setPlacementRiskFilter('ALL');
+                  setCurrentPage(1);
+                }}
+              />
             </div>
 
             {/* ===================================================================
@@ -2485,7 +2507,7 @@ export default function CampusDashboard() {
                     Student Directory & Analytics Roster
                   </h2>
                   <span style={{ fontSize: '0.80rem', color: '#64748B' }}>
-                    Displaying {cohortStudents.length} of {rosterCounts.total_records || 50} Selected Student Records (Active Cohort) · {summaryData.total_students ? summaryData.total_students.toLocaleString() : '50,008'} Total in Database
+                    Displaying {((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, totalRecords).toLocaleString()} of {totalRecords.toLocaleString()} Student Records · Page {currentPage} of {totalPages.toLocaleString()} · {summaryData.total_students ? summaryData.total_students.toLocaleString() : '50,008'} Total in Database
                   </span>
                 </div>
 
@@ -2830,7 +2852,7 @@ export default function CampusDashboard() {
                 </table>
               </div>
 
-              {/* Directory Cohort Display Footer (Direct 50 Records Display • Zero Pagination) */}
+              {/* Directory Roster Pagination & Navigation Controls */}
               <div
                 style={{
                   display: 'flex',
@@ -2845,17 +2867,83 @@ export default function CampusDashboard() {
                   color: '#64748B',
                 }}
               >
-                <div>
-                  {recordTypeFilter === 'verified_profile' ? (
-                    <span>Showing <strong>{cohortStudents.length}</strong> verified student profiles (100% telemetry completeness)</span>
-                  ) : recordTypeFilter === 'anonymous_cohort' ? (
-                    <span>Showing <strong>{cohortStudents.length}</strong> benchmark cohort records (94.1% telemetry completeness)</span>
-                  ) : (
-                    <span>Showing all <strong>{cohortStudents.length}</strong> selected student records directly ({rosterCounts.verified_profiles || 8} verified profiles • {rosterCounts.anonymous_cohort || 42} benchmark records)</span>
-                  )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>
+                    Showing <strong>{((currentPage - 1) * pageSize) + 1}–{Math.min(currentPage * pageSize, totalRecords).toLocaleString()}</strong> of <strong>{totalRecords.toLocaleString()}</strong> students
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>•</span>
+                  <span style={{ fontSize: '0.74rem' }}>
+                    {rosterCounts.verified_profiles || 8} verified profiles · {(rosterCounts.anonymous_cohort || 50000).toLocaleString()} benchmark records
+                  </span>
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#10B981', fontWeight: 600 }}>
-                  ✓ {cohortStudents.length === 50 ? '50-Record Dashboard Cohort Loaded' : `${cohortStudents.length} Records Loaded`} (Direct Display • No Pagination)
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {/* Page Size Selector */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.76rem' }}>
+                    <span>Rows:</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      style={{
+                        padding: '3px 6px',
+                        borderRadius: '6px',
+                        fontSize: '0.74rem',
+                        border: `1px solid ${isDarkMode ? '#334155' : '#CBD5E1'}`,
+                        backgroundColor: isDarkMode ? '#0F172A' : '#FFFFFF',
+                        color: isDarkMode ? '#FFFFFF' : '#0F172A',
+                      }}
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+
+                  {/* Previous Page Button */}
+                  <button
+                    type="button"
+                    disabled={currentPage <= 1 || isLoadingStudents}
+                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      border: `1px solid ${isDarkMode ? '#334155' : '#CBD5E1'}`,
+                      backgroundColor: currentPage <= 1 ? (isDarkMode ? '#1E293B' : '#F1F5F9') : '#1E6BFF',
+                      color: currentPage <= 1 ? '#94A3B8' : '#FFFFFF',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    ◀ Prev
+                  </button>
+
+                  {/* Page Indicator */}
+                  <span style={{ fontSize: '0.76rem', fontWeight: 600, color: isDarkMode ? '#FFFFFF' : '#0F172A' }}>
+                    Page {currentPage} of {totalPages.toLocaleString()}
+                  </span>
+
+                  {/* Next Page Button */}
+                  <button
+                    type="button"
+                    disabled={currentPage >= totalPages || isLoadingStudents}
+                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      border: `1px solid ${isDarkMode ? '#334155' : '#CBD5E1'}`,
+                      backgroundColor: currentPage >= totalPages ? (isDarkMode ? '#1E293B' : '#F1F5F9') : '#1E6BFF',
+                      color: currentPage >= totalPages ? '#94A3B8' : '#FFFFFF',
+                      fontSize: '0.74rem',
+                      fontWeight: 600,
+                      cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Next ▶
+                  </button>
                 </div>
               </div>
 
