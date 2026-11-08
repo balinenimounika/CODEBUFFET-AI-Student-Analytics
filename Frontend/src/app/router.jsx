@@ -117,9 +117,81 @@ export default function AppRoutes() {
       />
       <Route path="/mentor/*" element={<Navigate to="/mentor/dashboard" replace />} />
 
-      {/* Placement Officer Portal */}
+      {/* Placement Officer Portal Routes */}
+      <Route
+        path="/placement"
+        element={
+          <ProtectedRoute allowedRoles={['tpo', 'admin']}>
+            <PlacementDashboard />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/placement/dashboard"
+        element={
+          <ProtectedRoute allowedRoles={['tpo', 'admin']}>
+            <PlacementDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/placement/candidates"
+        element={
+          <ProtectedRoute allowedRoles={['tpo', 'admin']}>
+            <PlacementDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/placement/pipeline"
+        element={
+          <ProtectedRoute allowedRoles={['tpo', 'admin']}>
+            <PlacementDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/placement/drives"
+        element={
+          <ProtectedRoute allowedRoles={['tpo', 'admin']}>
+            <PlacementDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/placement/benchmarks"
+        element={
+          <ProtectedRoute allowedRoles={['tpo', 'admin']}>
+            <PlacementDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/placement/interviews"
+        element={
+          <ProtectedRoute allowedRoles={['tpo', 'admin']}>
+            <PlacementDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/placement/reports"
+        element={
+          <ProtectedRoute allowedRoles={['tpo', 'admin']}>
+            <PlacementDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/placement/settings"
+        element={
+          <ProtectedRoute allowedRoles={['tpo', 'admin']}>
+            <PlacementDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/placement/*"
         element={
           <ProtectedRoute allowedRoles={['tpo', 'admin']}>
             <PlacementDashboard />

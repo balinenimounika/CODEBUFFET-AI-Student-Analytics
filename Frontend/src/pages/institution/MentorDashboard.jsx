@@ -16,6 +16,11 @@ import {
   Bot,
   Loader2,
   CheckCircle2,
+  Check,
+  ShieldCheck,
+  Database,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -36,7 +41,7 @@ const DEFAULT_DISTRIBUTION = [
 ];
 
 export default function MentorDashboard() {
-  const { currentUser, logout, loginWithDemo } = useAuth();
+  const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,6 +55,10 @@ export default function MentorDashboard() {
   const [copilotData, setCopilotData] = useState(null);
   const [approvedRecs, setApprovedRecs] = useState({});
   const [copilotError, setCopilotError] = useState('');
+  const [inspectModalOpen, setInspectModalOpen] = useState(false);
+  const [inspectStudent, setInspectStudent] = useState(null);
+  const [approvingStudentId, setApprovingStudentId] = useState(null);
+  const [actionFeedback, setActionFeedback] = useState(null);
 
   // Live Backend Data States
   const [mentees, setMentees] = useState([]);
@@ -244,6 +253,76 @@ export default function MentorDashboard() {
     }
   };
 
+  // Escape key handler for accessible modal dismissal
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setInspectModalOpen(false);
+        setInspectStudent(null);
+        setCopilotModalOpen(false);
+        setCreateTaskModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Auto-dismiss action feedback notification
+  useEffect(() => {
+    if (actionFeedback) {
+      const timer = setTimeout(() => setActionFeedback(null), 4500);
+      return () => clearTimeout(timer);
+    }
+  }, [actionFeedback]);
+
+  // Persistent Mentee Intervention Approval Action
+  const handleApproveMentee = async (student) => {
+    const studentId = student.id || student.roll_no;
+    setApprovingStudentId(studentId);
+    setActionFeedback(null);
+    try {
+      const res = await api.approveStudentIntervention(studentId);
+      if (res?.success) {
+        setApprovedRecs((prev) => ({ ...prev, [studentId]: true, [student.name]: true }));
+        setMentees((prev) =>
+          prev.map((m) =>
+            (m.id === studentId || m.roll_no === studentId)
+              ? { ...m, isApproved: true }
+              : m
+          )
+        );
+        if (inspectStudent && (inspectStudent.id === studentId || inspectStudent.roll_no === studentId)) {
+          setInspectStudent((prev) => ({ ...prev, isApproved: true }));
+        }
+        setActionFeedback({
+          type: 'success',
+          message: res.message || `Intervention for ${student.name} (${studentId}) successfully approved.`,
+        });
+        try {
+          const mentorName = currentUser?.name || currentUser?.full_name || 'Prof. Rajesh Kumar';
+          const cleanName = mentorName.replace(/^Prof\.\s*/i, '').replace(/^Dr\.\s*/i, '').trim();
+          const updatedInterventions = await api.getInterventions(cleanName);
+          if (Array.isArray(updatedInterventions)) {
+            setInterventions(updatedInterventions);
+          }
+        } catch {}
+      } else {
+        setActionFeedback({
+          type: 'error',
+          message: res?.message || 'Approval could not be completed.',
+        });
+      }
+    } catch (err) {
+      console.error('Failed to approve mentee intervention:', err);
+      setActionFeedback({
+        type: 'error',
+        message: err.message || 'Failed to approve intervention. Please verify mentor assignment authorization.',
+      });
+    } finally {
+      setApprovingStudentId(null);
+    }
+  };
+
   const handleOpenCopilot = async (student) => {
     setCopilotModalOpen(true);
     setCopilotLoading(true);
@@ -371,84 +450,12 @@ export default function MentorDashboard() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span
-            style={{
-              padding: '2px 8px',
-              borderRadius: '4px',
-              backgroundColor: isLiveApi ? '#10B981' : '#F59E0B',
-              fontWeight: 700,
-              fontSize: '0.74rem',
-              letterSpacing: '0.04em',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#FFFFFF' }} />
-            <span>{isLiveApi ? 'FASTAPI MENTOR ENDPOINTS ACTIVE' : 'FACULTY MENTOR PORTAL'}</span>
-          </span>
           <span>
             Logged in as: <strong>{currentUser?.name || 'Prof. Rajesh Kumar'}</strong> (Faculty Mentor • CSE)
           </span>
         </div>
 
-        {/* Quick Role Switchers */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.72rem', color: '#94A3B8', marginRight: '4px' }}>Switch View:</span>
-          <button
-            onClick={async () => {
-              await loginWithDemo('admin');
-              navigate('/institution/dashboard');
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-            }}
-          >
-            🏛️ Admin
-          </button>
-          <button
-            onClick={async () => {
-              await loginWithDemo('tpo');
-              navigate('/placement/dashboard');
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-            }}
-          >
-            💼 Placement
-          </button>
-          <button
-            onClick={async () => {
-              await loginWithDemo('student');
-              navigate('/student/dashboard');
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-            }}
-          >
-            🎓 Student
-          </button>
           <button
             onClick={handleLogout}
             style={{
@@ -627,6 +634,37 @@ export default function MentorDashboard() {
 
           {/* Canvas Content */}
           <main style={{ padding: '1.75rem 2rem 3rem', maxWidth: '1440px', width: '100%', margin: '0 auto' }}>
+            {/* ACTION NOTIFICATION FEEDBACK BANNER */}
+            {actionFeedback && (
+              <div
+                style={{
+                  marginBottom: '1.25rem',
+                  padding: '12px 18px',
+                  borderRadius: '12px',
+                  backgroundColor: actionFeedback.type === 'success' ? '#ECFDF5' : '#FEF2F2',
+                  border: `1px solid ${actionFeedback.type === 'success' ? '#A7F3D0' : '#FECACA'}`,
+                  color: actionFeedback.type === 'success' ? '#065F46' : '#991B1B',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {actionFeedback.type === 'success' ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+                  <span>{actionFeedback.message}</span>
+                </div>
+                <button
+                  onClick={() => setActionFeedback(null)}
+                  style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 700 }}
+                  title="Dismiss"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             {/* HERO BANNER */}
             <div
               style={{
@@ -1235,28 +1273,87 @@ export default function MentorDashboard() {
                             </span>
                           </td>
                           <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                            {(() => {
+                              const isStudentApproved =
+                                Boolean(s.isApproved) ||
+                                Boolean(approvedRecs[s.id]) ||
+                                Boolean(approvedRecs[s.roll_no]) ||
+                                Boolean(approvedRecs[s.name]) ||
+                                interventions.some(
+                                  (inv) =>
+                                    (inv.student_roll_no === s.id || inv.student_roll_no === s.roll_no) &&
+                                    (inv.approval_status === 'APPROVED' || inv.status === 'OPEN' || inv.status === 'COMPLETED')
+                                );
+
+                              if (isStudentApproved) {
+                                return (
+                                  <button
+                                    disabled
+                                    style={{
+                                      padding: '5px 10px',
+                                      borderRadius: '6px',
+                                      backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : '#ECFDF5',
+                                      color: '#059669',
+                                      border: '1px solid #A7F3D0',
+                                      fontSize: '0.76rem',
+                                      fontWeight: 700,
+                                      cursor: 'default',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      marginRight: '6px',
+                                    }}
+                                    title="Intervention already approved and synced"
+                                  >
+                                    <Check size={13} />
+                                    <span>Approved</span>
+                                  </button>
+                                );
+                              }
+
+                              const isApproving = approvingStudentId === (s.id || s.roll_no);
+
+                              return (
+                                <button
+                                  onClick={() => handleApproveMentee(s)}
+                                  disabled={isApproving}
+                                  style={{
+                                    padding: '5px 10px',
+                                    borderRadius: '6px',
+                                    backgroundColor: '#10B981',
+                                    color: '#FFFFFF',
+                                    border: 'none',
+                                    fontSize: '0.76rem',
+                                    fontWeight: 600,
+                                    cursor: isApproving ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    marginRight: '6px',
+                                    opacity: isApproving ? 0.7 : 1,
+                                    transition: 'all 150ms ease',
+                                  }}
+                                  title="Approve recommended intervention"
+                                >
+                                  {isApproving ? (
+                                    <>
+                                      <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                                      <span>Approving...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check size={13} />
+                                      <span>Approve</span>
+                                    </>
+                                  )}
+                                </button>
+                              );
+                            })()}
                             <button
-                              onClick={() => handleOpenCopilot(s)}
-                              style={{
-                                padding: '5px 10px',
-                                borderRadius: '6px',
-                                backgroundColor: '#8B5CF6',
-                                color: '#FFFFFF',
-                                border: 'none',
-                                fontSize: '0.76rem',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                marginRight: '6px',
+                              onClick={() => {
+                                setInspectStudent(s);
+                                setInspectModalOpen(true);
                               }}
-                            >
-                              <Bot size={13} />
-                              <span>AI Copilot</span>
-                            </button>
-                            <button
-                              onClick={() => setSelectedStudent(s)}
                               style={{
                                 padding: '5px 10px',
                                 borderRadius: '6px',
@@ -1266,9 +1363,13 @@ export default function MentorDashboard() {
                                 fontSize: '0.76rem',
                                 fontWeight: 600,
                                 cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
                               }}
                             >
-                              Inspect Mentee
+                              <Eye size={13} />
+                              <span>Inspect Mentee</span>
                             </button>
                           </td>
                         </tr>
@@ -1338,39 +1439,7 @@ export default function MentorDashboard() {
                 </div>
               </div>
 
-              {/* Selected Mentee Diagnostic Card */}
-              {selectedStudent && (
-                <div
-                  style={{
-                    marginTop: '1.25rem',
-                    padding: '1.25rem',
-                    borderRadius: '14px',
-                    backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
-                    border: '1px solid #1E6BFF',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Eye size={18} style={{ color: '#1E6BFF' }} />
-                      <strong style={{ fontSize: '0.94rem' }}>
-                        Mentee Diagnostic & Action Profile: {selectedStudent.name} ({selectedStudent.id})
-                      </strong>
-                    </div>
-                    <button
-                      onClick={() => setSelectedStudent(null)}
-                      style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginTop: '10px', fontSize: '0.82rem' }}>
-                    <div>LMS Assignment Completion: <strong>{selectedStudent.lmsCompletion || 88}%</strong></div>
-                    <div>Coding Assessment: <strong>{selectedStudent.codingSkills || 8.2}/10</strong></div>
-                    <div>DSA Benchmark: <strong>{selectedStudent.dsaScore || 8.5}/10</strong></div>
-                    <div>Active Backlogs: <strong style={{ color: selectedStudent.backlogs > 0 ? '#DC2626' : '#059669' }}>{selectedStudent.backlogs || 0}</strong></div>
-                  </div>
-                </div>
-              )}
+
             </div>
           </main>
         </div>
@@ -1570,6 +1639,435 @@ export default function MentorDashboard() {
                 </div>
               </div>
             ) : null}
+          </div>
+        </div>
+      )}
+
+      {/* INSPECT MENTEE MODAL POPUP */}
+      {inspectModalOpen && inspectStudent && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setInspectModalOpen(false);
+              setInspectStudent(null);
+            }
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100,
+            padding: '1.25rem',
+            overflowY: 'auto',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: isDarkMode ? '#1E293B' : '#FFFFFF',
+              borderRadius: '20px',
+              maxWidth: '780px',
+              width: '100%',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              padding: '2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              border: `1px solid ${isDarkMode ? '#334155' : '#E2E8F0'}`,
+              color: isDarkMode ? '#F8FAFC' : '#0F172A',
+              position: 'relative',
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                paddingBottom: '1.25rem',
+                borderBottom: `1px solid ${isDarkMode ? '#334155' : '#F1F5F9'}`,
+                marginBottom: '1.25rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <StudentAvatar
+                  src={inspectStudent.avatar}
+                  name={inspectStudent.name}
+                  id={inspectStudent.id}
+                  size={54}
+                />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>
+                      {inspectStudent.name}
+                    </h3>
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        backgroundColor:
+                          inspectStudent.recordType === 'verified_profile'
+                            ? (isDarkMode ? 'rgba(16, 185, 129, 0.2)' : '#ECFDF5')
+                            : (isDarkMode ? 'rgba(30, 107, 255, 0.2)' : '#EFF6FF'),
+                        color: inspectStudent.recordType === 'verified_profile' ? '#059669' : '#1E6BFF',
+                        border: `1px solid ${inspectStudent.recordType === 'verified_profile' ? '#A7F3D0' : '#BFDBFE'}`,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                      }}
+                    >
+                      {inspectStudent.recordType === 'verified_profile' ? (
+                        <>
+                          <ShieldCheck size={12} />
+                          <span>Verified Profile (100% Provenance)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Database size={12} />
+                          <span>Benchmark Cohort (94.1% Telemetry)</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '3px' }}>
+                    Roll No: <strong>{inspectStudent.id || inspectStudent.roll_no}</strong> • {inspectStudent.department} • {inspectStudent.year || '3rd Year'} (Semester {inspectStudent.semester || 6})
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setInspectModalOpen(false);
+                  setInspectStudent(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94A3B8',
+                  fontSize: '1.25rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                }}
+                title="Close modal (Escape)"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 4 Metric Panels */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem', marginBottom: '1.5rem' }}>
+              {/* Panel 1: Academic Performance */}
+              <div
+                style={{
+                  padding: '1.25rem',
+                  borderRadius: '12px',
+                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                  border: `1px solid ${isDarkMode ? '#334155' : '#E2E8F0'}`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#1E6BFF', fontWeight: 700, fontSize: '0.86rem' }}>
+                  <GraduationCap size={18} />
+                  <span>Academic Performance</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.82rem' }}>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>Cumulative CGPA</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{inspectStudent.cgpa} <span style={{ fontSize: '0.74rem', color: '#64748B' }}>/ 10.0</span></div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>Attendance Rate</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: inspectStudent.attendance < 75.0 ? '#DC2626' : '#059669' }}>
+                      {inspectStudent.attendance}%
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>Active Backlogs</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: (inspectStudent.backlogs || 0) > 0 ? '#DC2626' : '#059669' }}>
+                      {inspectStudent.backlogs || 0}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>Success Score</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1E6BFF' }}>
+                      {inspectStudent.successScore} <span style={{ fontSize: '0.72rem', color: '#64748B' }}>({inspectStudent.scoreBand || 'GOOD'})</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Panel 2: Technical Skills */}
+              <div
+                style={{
+                  padding: '1.25rem',
+                  borderRadius: '12px',
+                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                  border: `1px solid ${isDarkMode ? '#334155' : '#E2E8F0'}`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#10B981', fontWeight: 700, fontSize: '0.86rem' }}>
+                  <Target size={18} />
+                  <span>Technical Skills & Velocity</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.82rem' }}>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>Coding Assessment</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{inspectStudent.codingSkills || 8.0} <span style={{ fontSize: '0.74rem', color: '#64748B' }}>/ 10</span></div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>DSA Benchmark</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{inspectStudent.dsaScore || 8.0} <span style={{ fontSize: '0.74rem', color: '#64748B' }}>/ 10</span></div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>LMS Assignment Velocity</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{inspectStudent.lmsCompletion || 85}%</div>
+                  </div>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>Weekly LMS Activity</div>
+                    <div style={{ fontSize: '0.92rem', fontWeight: 700 }}>{inspectStudent.lmsLoginsPerWeek || 8} logins/wk</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Panel 3: Risk Assessment */}
+              <div
+                style={{
+                  padding: '1.25rem',
+                  borderRadius: '12px',
+                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                  border: `1px solid ${isDarkMode ? '#334155' : '#E2E8F0'}`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#F59E0B', fontWeight: 700, fontSize: '0.86rem' }}>
+                  <AlertTriangle size={18} />
+                  <span>Decoupled Risk Assessment</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.82rem', marginBottom: '8px' }}>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>Academic Risk Band</div>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        marginTop: '4px',
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        backgroundColor: inspectStudent.academicRisk === 'HIGH' ? '#FEF2F2' : inspectStudent.academicRisk === 'MEDIUM' ? '#FFFBEB' : '#ECFDF5',
+                        color: inspectStudent.academicRisk === 'HIGH' ? '#DC2626' : inspectStudent.academicRisk === 'MEDIUM' ? '#D97706' : '#059669',
+                      }}
+                    >
+                      {inspectStudent.academicRisk} ({Math.round((inspectStudent.academicRiskProb || 0.15) * 100)}%)
+                    </span>
+                  </div>
+                  <div>
+                    <div style={{ color: '#64748B', fontSize: '0.74rem' }}>Placement Readiness</div>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        marginTop: '4px',
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        backgroundColor: inspectStudent.placementRisk === 'HIGH' ? '#FEF2F2' : inspectStudent.placementRisk === 'MEDIUM' ? '#FFFBEB' : '#ECFDF5',
+                        color: inspectStudent.placementRisk === 'HIGH' ? '#DC2626' : inspectStudent.placementRisk === 'MEDIUM' ? '#D97706' : '#059669',
+                      }}
+                    >
+                      {inspectStudent.placementRisk === 'LOW' ? 'READY' : inspectStudent.placementRisk} ({Math.round((inspectStudent.placementRiskProb || 0.20) * 100)}%)
+                    </span>
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.76rem', color: '#64748B', marginTop: '6px', borderTop: `1px solid ${isDarkMode ? '#334155' : '#E2E8F0'}`, paddingTop: '6px' }}>
+                  Primary Risk Factor: <strong style={{ color: isDarkMode ? '#FFFFFF' : '#0F172A' }}>{inspectStudent.topRiskFactor || 'None (On-track candidate)'}</strong>
+                </div>
+              </div>
+
+              {/* Panel 4: Mentor Information & Interventions */}
+              <div
+                style={{
+                  padding: '1.25rem',
+                  borderRadius: '12px',
+                  backgroundColor: isDarkMode ? '#0F172A' : '#F8FAFC',
+                  border: `1px solid ${isDarkMode ? '#334155' : '#E2E8F0'}`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: '#8B5CF6', fontWeight: 700, fontSize: '0.86rem' }}>
+                  <Users size={18} />
+                  <span>Faculty Mentorship & Tasks</span>
+                </div>
+                <div style={{ fontSize: '0.82rem', marginBottom: '8px' }}>
+                  <div style={{ color: '#64748B', fontSize: '0.74rem' }}>Assigned Faculty Mentor</div>
+                  <div style={{ fontWeight: 700, fontSize: '0.94rem' }}>
+                    {inspectStudent.assignedMentor || currentUser?.name || 'Prof. Rajesh Kumar'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.78rem', marginBottom: '8px' }}>
+                  <div>
+                    Pending Tasks:{' '}
+                    <strong style={{ color: '#D97706' }}>
+                      {interventions.filter((i) => (i.student_roll_no === inspectStudent.id || i.student_roll_no === inspectStudent.roll_no) && i.status !== 'COMPLETED').length}
+                    </strong>
+                  </div>
+                  <div>
+                    Completed Tasks:{' '}
+                    <strong style={{ color: '#059669' }}>
+                      {interventions.filter((i) => (i.student_roll_no === inspectStudent.id || i.student_roll_no === inspectStudent.roll_no) && i.status === 'COMPLETED').length}
+                    </strong>
+                  </div>
+                </div>
+                <div style={{ maxHeight: '70px', overflowY: 'auto', fontSize: '0.74rem', color: '#64748B' }}>
+                  {interventions.filter((i) => i.student_roll_no === inspectStudent.id || i.student_roll_no === inspectStudent.roll_no).length > 0 ? (
+                    interventions
+                      .filter((i) => i.student_roll_no === inspectStudent.id || i.student_roll_no === inspectStudent.roll_no)
+                      .slice(0, 2)
+                      .map((task) => (
+                        <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: task.status === 'COMPLETED' ? '#10B981' : '#F59E0B' }} />
+                          <span style={{ textDecoration: task.status === 'COMPLETED' ? 'line-through' : 'none' }}>{task.title}</span>
+                        </div>
+                      ))
+                  ) : (
+                    <div>No interventions dispatched yet.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingTop: '1.25rem',
+                borderTop: `1px solid ${isDarkMode ? '#334155' : '#F1F5F9'}`,
+                flexWrap: 'wrap',
+                gap: '10px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {(() => {
+                  const isApproved =
+                    Boolean(inspectStudent.isApproved) ||
+                    Boolean(approvedRecs[inspectStudent.id]) ||
+                    Boolean(approvedRecs[inspectStudent.roll_no]) ||
+                    Boolean(approvedRecs[inspectStudent.name]) ||
+                    interventions.some(
+                      (inv) =>
+                        (inv.student_roll_no === inspectStudent.id || inv.student_roll_no === inspectStudent.roll_no) &&
+                        (inv.approval_status === 'APPROVED' || inv.status === 'OPEN' || inv.status === 'COMPLETED')
+                    );
+
+                  if (isApproved) {
+                    return (
+                      <button
+                        disabled
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: '8px',
+                          backgroundColor: isDarkMode ? 'rgba(16, 185, 129, 0.2)' : '#ECFDF5',
+                          color: '#059669',
+                          border: '1px solid #A7F3D0',
+                          fontSize: '0.84rem',
+                          fontWeight: 700,
+                          cursor: 'default',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Check size={15} />
+                        <span>Intervention Approved</span>
+                      </button>
+                    );
+                  }
+
+                  const isApproving = approvingStudentId === (inspectStudent.id || inspectStudent.roll_no);
+
+                  return (
+                    <button
+                      onClick={() => handleApproveMentee(inspectStudent)}
+                      disabled={isApproving}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '8px',
+                        backgroundColor: '#10B981',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        fontSize: '0.84rem',
+                        fontWeight: 600,
+                        cursor: isApproving ? 'not-allowed' : 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        opacity: isApproving ? 0.7 : 1,
+                      }}
+                    >
+                      {isApproving ? (
+                        <>
+                          <Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} />
+                          <span>Approving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check size={15} />
+                          <span>Approve Intervention</span>
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
+
+                <button
+                  onClick={() => {
+                    setNewTaskRoll(inspectStudent.id || inspectStudent.roll_no);
+                    setNewTaskName(inspectStudent.name);
+                    setInspectModalOpen(false);
+                    setCreateTaskModalOpen(true);
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    backgroundColor: '#1E6BFF',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <Plus size={15} />
+                  <span>Assign Remedial Task</span>
+                </button>
+              </div>
+
+              <button
+                onClick={() => {
+                  setInspectModalOpen(false);
+                  setInspectStudent(null);
+                }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  backgroundColor: isDarkMode ? '#334155' : '#F1F5F9',
+                  color: isDarkMode ? '#FFFFFF' : '#475569',
+                  border: `1px solid ${isDarkMode ? '#475569' : '#CBD5E1'}`,
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

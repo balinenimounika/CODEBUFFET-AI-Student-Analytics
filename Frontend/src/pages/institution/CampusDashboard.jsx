@@ -81,7 +81,7 @@ import api from '../../services/api';
  * 8. Audited ML Model Intelligence & Checksum Transparency (LightGBM Placement vs Deterministic Academic Engine)
  */
 export default function CampusDashboard() {
-  const { currentUser, logout, loginWithDemo } = useAuth();
+  const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
   // Navigation & Theme
@@ -437,7 +437,7 @@ export default function CampusDashboard() {
               setRosterCounts({
                 verified_profiles: res.counts.verified_profiles ?? 8,
                 anonymous_cohort: res.counts.anonymous_cohort ?? 50000,
-                total_records: res.counts.total_records ?? (res.total || 50008),
+                total_records: res.counts.database_total || res.counts.total_records || (res.total || 50008),
               });
             }
           } else if (Array.isArray(res)) {
@@ -747,83 +747,12 @@ export default function CampusDashboard() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span
-            style={{
-              padding: '2px 8px',
-              borderRadius: '4px',
-              backgroundColor: isLiveApi ? '#10B981' : '#1E6BFF',
-              fontWeight: 700,
-              fontSize: '0.74rem',
-              letterSpacing: '0.04em',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#FFFFFF' }} />
-            <span>{isLiveApi ? 'FASTAPI ML BACKEND ACTIVE' : 'STANDALONE MODE'}</span>
-          </span>
           <span>
             Institutional Commander: <strong>{currentUser?.name || 'Dr. R. Kumar'}</strong> ({currentUser?.roleLabel || 'Institution Admin'})
           </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.72rem', color: '#94A3B8', marginRight: '4px' }}>Quick Switcher:</span>
-          <button
-            onClick={async () => {
-              await loginWithDemo('mentor');
-              navigate('/mentor/dashboard');
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-            }}
-          >
-            👨‍🏫 Faculty Mentor
-          </button>
-          <button
-            onClick={async () => {
-              await loginWithDemo('tpo');
-              navigate('/placement/dashboard');
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-            }}
-          >
-            💼 TPO Office
-          </button>
-          <button
-            onClick={async () => {
-              await loginWithDemo('student');
-              navigate('/student/dashboard');
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-            }}
-          >
-            🎓 Student Portal
-          </button>
           <button
             onClick={handleLogout}
             style={{

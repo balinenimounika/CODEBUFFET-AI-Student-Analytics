@@ -19,7 +19,7 @@ DB_PATH = os.path.join(BASE_DIR, os.getenv("DATABASE_PATH", "backend/codebuffet.
 def get_db_connection() -> sqlite3.Connection:
     """Returns a SQLite connection with row factory enabled."""
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10.0)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -138,15 +138,22 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_place_risk ON students(placement_risk_band);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_mentor ON students(assigned_mentor);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_score ON students(success_score);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_cgpa ON students(cgpa);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_dsa ON students(dsa_score);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_aptitude ON students(aptitude_score);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_roll_no ON students(roll_no);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_name ON students(full_name);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_students_backlogs ON students(backlogs);")
 
-    # Categorize verified enrolled student records cleanly
+    # Categorize verified enrolled student records cleanly (only if not already set)
     cursor.execute("""
         UPDATE students
         SET record_type = 'verified_profile',
             source_provenance = 'Official University Registrar (Enrolled B.Tech Cohort)',
             data_completeness = 100.0
-        WHERE user_id IS NOT NULL 
-           OR roll_no IN ('STU-2024-042', 'STU-2024-001', 'STU-2024-019', 'STU-2024-088', 'STU-2024-112', 'STU-2024-054', 'STU-2024-067', 'STU-2024-093')
+        WHERE (user_id IS NOT NULL 
+           OR roll_no IN ('STU-2024-042', 'STU-2024-001', 'STU-2024-019', 'STU-2024-088', 'STU-2024-112', 'STU-2024-054', 'STU-2024-067', 'STU-2024-093'))
+          AND (record_type IS NULL OR record_type != 'verified_profile')
     """)
     cursor.execute("""
         UPDATE students
@@ -155,7 +162,7 @@ def init_db():
             data_completeness = 94.1
         WHERE user_id IS NULL
           AND roll_no NOT IN ('STU-2024-042', 'STU-2024-001', 'STU-2024-019', 'STU-2024-088', 'STU-2024-112', 'STU-2024-054', 'STU-2024-067', 'STU-2024-093')
-          AND record_type != 'verified_profile'
+          AND (record_type IS NULL OR (record_type != 'anonymous_cohort' AND record_type != 'verified_profile'))
     """)
 
     # 3. Interventions & Mentoring Tasks
@@ -169,6 +176,7 @@ def init_db():
         category TEXT NOT NULL,
         assigned_mentor TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'OPEN', -- 'OPEN', 'IN_PROGRESS', 'COMPLETED'
+        approval_status TEXT DEFAULT 'APPROVED', -- 'APPROVED', 'PENDING'
         due_date TEXT NOT NULL,
         priority TEXT DEFAULT 'MEDIUM', -- 'HIGH', 'MEDIUM', 'LOW'
         owner_role TEXT DEFAULT 'mentor', -- 'student', 'mentor', 'tpo'
@@ -192,6 +200,8 @@ def init_db():
         cursor.execute("ALTER TABLE interventions ADD COLUMN completed_at TIMESTAMP")
     if "created_by" not in existing_inter_cols:
         cursor.execute("ALTER TABLE interventions ADD COLUMN created_by TEXT")
+    if "approval_status" not in existing_inter_cols:
+        cursor.execute("ALTER TABLE interventions ADD COLUMN approval_status TEXT DEFAULT 'APPROVED'")
 
     # 4. Student Historical Telemetry (Performance & Attendance Progression)
     cursor.execute("""
@@ -221,6 +231,10 @@ def init_db():
         max_backlogs INTEGER DEFAULT 0,
         min_dsa_score REAL DEFAULT 6.0,
         min_aptitude_score REAL DEFAULT 60.0,
+        dsa_mandatory INTEGER DEFAULT 1,
+        aptitude_mandatory INTEGER DEFAULT 0,
+        mandatory_skills TEXT DEFAULT 'DSA',
+        preferred_skills TEXT DEFAULT 'System Design',
         required_skills TEXT,
         department_eligibility TEXT DEFAULT 'ALL',
         deadline TEXT,
@@ -254,6 +268,94 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_applications_job ON placement_applications(job_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_applications_student ON placement_applications(student_roll_no);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_applications_stage ON placement_applications(stage);")
+
+    # Safe upgrade of placement_jobs columns if upgrading existing database
+    cursor.execute("PRAGMA table_info(placement_jobs)")
+    existing_job_cols = {col[1] for col in cursor.fetchall()}
+    for col_name, col_def in [
+        ("location", "TEXT DEFAULT 'Bengaluru, Hyderabad'"),
+        ("job_type", "TEXT DEFAULT 'Full Time'"),
+        ("open_date", "TEXT DEFAULT 'Oct 15, 2026'"),
+        ("close_date", "TEXT DEFAULT 'Nov 30, 2026'"),
+        ("interview_schedule", "TEXT DEFAULT 'Dec 05 - Dec 10, 2026'"),
+        ("drive_status", "TEXT DEFAULT 'ACTIVE'"),
+        ("logo_url", "TEXT"),
+        ("total_vacancies", "INTEGER DEFAULT 15"),
+    ]:
+        if col_name not in existing_job_cols:
+            cursor.execute(f"ALTER TABLE placement_jobs ADD COLUMN {col_name} {col_def}")
+
+    # 6. Pipeline Stage History
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS pipeline_stage_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        application_id INTEGER NOT NULL,
+        from_stage TEXT,
+        to_stage TEXT NOT NULL,
+        notes TEXT,
+        changed_by TEXT DEFAULT 'TPO Officer',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (application_id) REFERENCES placement_applications(id)
+    );
+    """)
+
+    # 7. Mock Interviews Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS mock_interviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_roll_no TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        department TEXT NOT NULL,
+        interviewer_name TEXT NOT NULL,
+        interviewer_email TEXT,
+        interview_type TEXT NOT NULL,
+        scheduled_date TEXT NOT NULL,
+        scheduled_time TEXT NOT NULL,
+        status TEXT DEFAULT 'Scheduled',
+        attendance_status TEXT DEFAULT 'Pending',
+        score REAL,
+        strengths TEXT,
+        weaknesses TEXT,
+        feedback TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    # 8. Placement Settings Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS placement_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        officer_email TEXT UNIQUE NOT NULL,
+        officer_name TEXT,
+        designation TEXT DEFAULT 'Senior Head of Training & Placement',
+        department TEXT DEFAULT 'Training & Placement Cell',
+        phone TEXT,
+        academic_year TEXT DEFAULT '2025-2026',
+        placement_season TEXT DEFAULT 'Phase-1 (Autumn / Winter 2026)',
+        email_notifications INTEGER DEFAULT 1,
+        sms_notifications INTEGER DEFAULT 0,
+        auto_shortlist_threshold REAL DEFAULT 75.0,
+        allow_multi_offers INTEGER DEFAULT 0,
+        max_offers_per_student INTEGER DEFAULT 2,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+
+    cursor.execute("SELECT id FROM placement_settings WHERE officer_email = 'tpo@codebuffet.edu'")
+    if not cursor.fetchone():
+        cursor.execute("""
+        INSERT INTO placement_settings (
+            officer_email, officer_name, designation, department, phone,
+            academic_year, placement_season, email_notifications, sms_notifications,
+            auto_shortlist_threshold, allow_multi_offers, max_offers_per_student
+        ) VALUES (
+            'tpo@codebuffet.edu', 'Vikram Malhotra', 'Director & Chief Placement Officer',
+            'Corporate Relations & Placement Cell', '+91 98765 43210',
+            '2025-2026', 'Phase-1 (Autumn / Winter 2026)', 1, 1, 75.0, 1, 2
+        )
+        """)
+
 
     # 7. Security Audit History
     cursor.execute("""
@@ -481,99 +583,99 @@ def seed_initial_data():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    admin_pass = os.getenv("DEFAULT_ADMIN_PASSWORD", "CodeBuffet@2026!")
-    student_pass = os.getenv("DEFAULT_STUDENT_PASSWORD", "Student@2026!")
-    mentor_pass = os.getenv("DEFAULT_MENTOR_PASSWORD", "Mentor@2026!")
-    tpo_pass = os.getenv("DEFAULT_TPO_PASSWORD", "TPO@2026!")
-
     # 1. Seed Accounts (Admin, 3 Faculty Mentors, TPO Director, Verified Student)
-    users_to_seed = [
-        (
-            os.getenv("DEFAULT_ADMIN_EMAIL", "admin@codebuffet.edu"),
-            "EMP-ADMIN-01",
-            hash_password(admin_pass),
-            "Dr. R. Kumar",
-            "admin",
-            "Institution Admin",
-            "Institutional Planning & Academics",
-            "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-        ),
-        (
-            os.getenv("DEFAULT_MENTOR_EMAIL", "rajesh.kumar@codebuffet.edu"),
-            "FAC-CSE-104",
-            hash_password(mentor_pass),
-            "Prof. Rajesh Kumar",
-            "mentor",
-            "Senior Faculty Mentor (CSE)",
-            "Computer Science & Engineering",
-            "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"
-        ),
-        (
-            "sunita.sharma@codebuffet.edu",
-            "FAC-ECE-201",
-            hash_password(mentor_pass),
-            "Dr. Sunita Sharma",
-            "mentor",
-            "Faculty Mentor (ECE & IT)",
-            "Electronics & Communication",
-            "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80"
-        ),
-        (
-            "k.murthy@codebuffet.edu",
-            "FAC-ME-305",
-            hash_password(mentor_pass),
-            "Prof. K. Murthy",
-            "mentor",
-            "Faculty Mentor (Mech & Civil)",
-            "Mechanical Engineering",
-            "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80"
-        ),
-        (
-            os.getenv("DEFAULT_TPO_EMAIL", "vikram.tpo@codebuffet.edu"),
-            "TPO-OFFICER-02",
-            hash_password(tpo_pass),
-            "Vikram Malhotra",
-            "tpo",
-            "Placement Director",
-            "Career & Corporate Relations",
-            "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
-        ),
-        (
-            os.getenv("DEFAULT_STUDENT_EMAIL", "stu-2024-042@codebuffet.edu"),
-            "STU-2024-042",
-            hash_password(student_pass),
-            "Aarav Sharma",
-            "student",
-            "Student (B.Tech)",
-            "Computer Science & Engineering",
-            "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&auto=format&fit=crop&q=80"
-        ),
-    ]
+    cursor.execute("SELECT COUNT(*) FROM users")
+    user_count = cursor.fetchone()[0]
+    if user_count < 6:
+        admin_pass = os.getenv("DEFAULT_ADMIN_PASSWORD", "CodeBuffet@2026!")
+        student_pass = os.getenv("DEFAULT_STUDENT_PASSWORD", "Student@2026!")
+        mentor_pass = os.getenv("DEFAULT_MENTOR_PASSWORD", "Mentor@2026!")
+        tpo_pass = os.getenv("DEFAULT_TPO_PASSWORD", "TPO@2026!")
 
-    for u in users_to_seed:
-        seed_email = u[0]
-        seed_roll_no = u[1]
+        users_to_seed = [
+            (
+                os.getenv("DEFAULT_ADMIN_EMAIL", "admin@codebuffet.edu"),
+                "EMP-ADMIN-01",
+                hash_password(admin_pass),
+                "Dr. R. Kumar",
+                "admin",
+                "Institution Admin",
+                "Institutional Planning & Academics",
+                "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
+            ),
+            (
+                os.getenv("DEFAULT_MENTOR_EMAIL", "rajesh.kumar@codebuffet.edu"),
+                "FAC-CSE-104",
+                hash_password(mentor_pass),
+                "Prof. Rajesh Kumar",
+                "mentor",
+                "Senior Faculty Mentor (CSE)",
+                "Computer Science & Engineering",
+                "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"
+            ),
+            (
+                "sunita.sharma@codebuffet.edu",
+                "FAC-ECE-201",
+                hash_password(mentor_pass),
+                "Dr. Sunita Sharma",
+                "mentor",
+                "Faculty Mentor (ECE & IT)",
+                "Electronics & Communication",
+                "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80"
+            ),
+            (
+                "k.murthy@codebuffet.edu",
+                "FAC-ME-305",
+                hash_password(mentor_pass),
+                "Prof. K. Murthy",
+                "mentor",
+                "Faculty Mentor (Mech & Civil)",
+                "Mechanical Engineering",
+                "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80"
+            ),
+            (
+                os.getenv("DEFAULT_TPO_EMAIL", "vikram.tpo@codebuffet.edu"),
+                "TPO-OFFICER-02",
+                hash_password(tpo_pass),
+                "Vikram Malhotra",
+                "tpo",
+                "Placement Director",
+                "Career & Corporate Relations",
+                "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80"
+            ),
+            (
+                os.getenv("DEFAULT_STUDENT_EMAIL", "stu-2024-042@codebuffet.edu"),
+                "STU-2024-042",
+                hash_password(student_pass),
+                "Aarav Sharma",
+                "student",
+                "Student (B.Tech)",
+                "Computer Science & Engineering",
+                "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&auto=format&fit=crop&q=80"
+            ),
+        ]
 
-        # Check existing user by both unique constraints: email and roll_no
-        existing_by_email = None
-        if seed_email:
-            cursor.execute("SELECT id, email, roll_no, role FROM users WHERE LOWER(email) = LOWER(?)", (seed_email,))
-            existing_by_email = cursor.fetchone()
+        for u in users_to_seed:
+            seed_email = u[0]
+            seed_roll_no = u[1]
 
-        existing_by_roll = None
-        if seed_roll_no:
-            cursor.execute("SELECT id, email, roll_no, role FROM users WHERE roll_no IS NOT NULL AND LOWER(roll_no) = LOWER(?)", (seed_roll_no,))
-            existing_by_roll = cursor.fetchone()
+            existing_by_email = None
+            if seed_email:
+                cursor.execute("SELECT id, email, roll_no, role FROM users WHERE LOWER(email) = LOWER(?)", (seed_email,))
+                existing_by_email = cursor.fetchone()
 
-        # If user already exists by either unique key, skip insertion.
-        # This guarantees idempotency on startup without overwriting passwords, roles, or existing records.
-        if existing_by_email or existing_by_roll:
-            continue
+            existing_by_roll = None
+            if seed_roll_no:
+                cursor.execute("SELECT id, email, roll_no, role FROM users WHERE roll_no IS NOT NULL AND LOWER(roll_no) = LOWER(?)", (seed_roll_no,))
+                existing_by_roll = cursor.fetchone()
 
-        cursor.execute("""
-        INSERT INTO users (email, roll_no, password_hash, full_name, role, role_label, department, avatar_url)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, u)
+            if existing_by_email or existing_by_roll:
+                continue
+
+            cursor.execute("""
+            INSERT INTO users (email, roll_no, password_hash, full_name, role, role_label, department, avatar_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, u)
 
     # 2. Seed Student Cohort (Verified Identifiable Profiles)
     students_to_seed = [
@@ -782,9 +884,9 @@ def seed_initial_data():
             """, app_item)
 
     # 7. Seed Bulk Benchmark Dataset from kaggle.csv (49,958 rows to reach full 50,008 dataset)
-    cursor.execute("SELECT COUNT(*) FROM students WHERE record_type = 'anonymous_cohort'")
-    current_benchmark_count = cursor.fetchone()[0]
-    if current_benchmark_count < 50000:
+    cursor.execute("SELECT COUNT(*) FROM students")
+    total_student_count = cursor.fetchone()[0]
+    if total_student_count < 50008:
         seed_benchmark_kaggle_dataset(cursor, conn)
 
     # 8. Ensure all benchmark students have unique realistic identities & avatars

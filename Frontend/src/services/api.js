@@ -226,6 +226,22 @@ export const api = {
       method: 'POST',
     }),
 
+  approveStudentIntervention: (rollNo) =>
+    request(`/api/institution/students/${encodeURIComponent(rollNo)}/approve-intervention`, {
+      method: 'POST',
+    }),
+
+  approveInterventionTask: (taskId) =>
+    request(`/api/institution/interventions/${taskId}/approve`, {
+      method: 'POST',
+    }),
+
+  verifyStudent: (rollNo, payload = {}) =>
+    request(`/api/institution/students/${encodeURIComponent(rollNo)}/verify`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   createStudent: (studentData) =>
     request('/api/institution/students', {
       method: 'POST',
@@ -316,7 +332,38 @@ export const api = {
     }),
 
   // Placement Endpoints
-  getPlacementJobs: () => request('/api/placement/jobs'),
+  getPlacementCandidates: (paramsObj = {}) => {
+    const params = new URLSearchParams();
+    if (paramsObj.page) params.append('page', paramsObj.page);
+    if (paramsObj.limit) params.append('limit', paramsObj.limit);
+    if (paramsObj.search) params.append('search', paramsObj.search);
+    if (paramsObj.department && paramsObj.department !== 'ALL') params.append('department', paramsObj.department);
+    if (paramsObj.min_cgpa) params.append('min_cgpa', paramsObj.min_cgpa);
+    if (paramsObj.max_cgpa) params.append('max_cgpa', paramsObj.max_cgpa);
+    if (paramsObj.min_dsa) params.append('min_dsa', paramsObj.min_dsa);
+    if (paramsObj.min_aptitude) params.append('min_aptitude', paramsObj.min_aptitude);
+    if (paramsObj.max_backlogs !== undefined && paramsObj.max_backlogs !== '') params.append('max_backlogs', paramsObj.max_backlogs);
+    if (paramsObj.risk_level && paramsObj.risk_level !== 'ALL') params.append('risk_level', paramsObj.risk_level);
+    if (paramsObj.eligibility_status && paramsObj.eligibility_status !== 'ALL') params.append('eligibility_status', paramsObj.eligibility_status);
+    if (paramsObj.recruitment_stage && paramsObj.recruitment_stage !== 'ALL') params.append('recruitment_stage', paramsObj.recruitment_stage);
+    if (paramsObj.sort_by) params.append('sort_by', paramsObj.sort_by);
+    if (paramsObj.sort_order) params.append('sort_order', paramsObj.sort_order);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/placement/candidates${qs}`);
+  },
+
+  getPlacementJobs: (paramsObj = {}) => {
+    const params = new URLSearchParams();
+    if (paramsObj.search) params.append('search', paramsObj.search);
+    if (paramsObj.department && paramsObj.department !== 'ALL') params.append('department', paramsObj.department);
+    if (paramsObj.status && paramsObj.status !== 'ALL') params.append('status', paramsObj.status);
+    if (paramsObj.min_package) params.append('min_package', paramsObj.min_package);
+    if (paramsObj.sort_by) params.append('sort_by', paramsObj.sort_by);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/placement/jobs${qs}`);
+  },
+
+  getPlacementJob: (jobId) => request(`/api/placement/jobs/${jobId}`),
 
   createPlacementJob: (jobData) =>
     request('/api/placement/jobs', {
@@ -324,10 +371,24 @@ export const api = {
       body: JSON.stringify(jobData),
     }),
 
-  getPlacementPipeline: (jobId = null, stage = null) => {
+  updatePlacementJob: (jobId, jobData) =>
+    request(`/api/placement/jobs/${jobId}`, {
+      method: 'PUT',
+      body: JSON.stringify(jobData),
+    }),
+
+  updatePlacementJobStatus: (jobId, driveStatus) =>
+    request(`/api/placement/jobs/${jobId}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ drive_status: driveStatus }),
+    }),
+
+  getPlacementPipeline: (jobId = null, stage = null, department = null, search = '') => {
     const params = new URLSearchParams();
     if (jobId) params.append('job_id', jobId);
-    if (stage) params.append('stage', stage);
+    if (stage && stage !== 'ALL') params.append('stage', stage);
+    if (department && department !== 'ALL') params.append('department', department);
+    if (search) params.append('search', search);
     const qs = params.toString() ? `?${params.toString()}` : '';
     return request(`/api/placement/pipeline${qs}`);
   },
@@ -338,6 +399,9 @@ export const api = {
       body: JSON.stringify({ application_id: applicationId, stage, notes }),
     }),
 
+  getPipelineHistory: (applicationId) =>
+    request(`/api/placement/pipeline/history/${applicationId}`),
+
   matchCandidateToJob: (jobId, studentRollNo) =>
     request('/api/placement/match', {
       method: 'POST',
@@ -345,6 +409,49 @@ export const api = {
     }),
 
   getPlacementAnalytics: () => request('/api/placement/analytics'),
+
+  getMockInterviews: (status = null, search = '') => {
+    const params = new URLSearchParams();
+    if (status && status !== 'ALL') params.append('status', status);
+    if (search) params.append('search', search);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/placement/interviews${qs}`);
+  },
+
+  scheduleMockInterview: (interviewData) =>
+    request('/api/placement/interviews', {
+      method: 'POST',
+      body: JSON.stringify(interviewData),
+    }),
+
+  updateMockInterview: (interviewId, interviewData) =>
+    request(`/api/placement/interviews/${interviewId}`, {
+      method: 'PUT',
+      body: JSON.stringify(interviewData),
+    }),
+
+  deleteMockInterview: (interviewId) =>
+    request(`/api/placement/interviews/${interviewId}`, {
+      method: 'DELETE',
+    }),
+
+  getPlacementBenchmarks: () => request('/api/placement/benchmarks'),
+
+  getPlacementReports: () => request('/api/placement/reports'),
+
+  getPlacementSettings: () => request('/api/placement/settings'),
+
+  updatePlacementSettings: (settingsData) =>
+    request('/api/placement/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settingsData),
+    }),
+
+  changePlacementPassword: (currentPassword, newPassword) =>
+    request('/api/placement/settings/password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
 };
 
 export default api;

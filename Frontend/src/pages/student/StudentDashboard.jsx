@@ -232,7 +232,7 @@ function generateClientGroundedAnswer(question, studentData, tasks) {
 }
 
 export default function StudentDashboard() {
-  const { currentUser, logout, loginWithDemo } = useAuth();
+  const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
   // Navigation tab state: 'cockpit' | 'tasks'
@@ -599,79 +599,9 @@ export default function StudentDashboard() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span
-            style={{
-              padding: '2px 8px',
-              borderRadius: '4px',
-              backgroundColor: isLiveApi ? '#10B981' : '#1E6BFF',
-              fontWeight: 700,
-              fontSize: '0.74rem',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-            }}
-          >
-            <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#FFFFFF' }} />
-            <span>{isLiveApi ? 'FASTAPI ML BACKEND ACTIVE' : 'STUDENT PORTAL'}</span>
-          </span>
           <span>Logged in as: <strong>{studentData?.name || currentUser?.name || 'Aarav Sharma'}</strong> (Roll ID: {studentData?.roll_no || currentUser?.roll_no || 'STU-2024-042'})</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.72rem', color: '#94A3B8', marginRight: '4px' }}>Switch View:</span>
-          <button
-            onClick={async () => {
-              await loginWithDemo('admin');
-              navigate('/institution/dashboard');
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-            }}
-          >
-            🏛️ Admin
-          </button>
-          <button
-            onClick={async () => {
-              await loginWithDemo('mentor');
-              navigate('/mentor/dashboard');
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-            }}
-          >
-            👨‍🏫 Mentor
-          </button>
-          <button
-            onClick={async () => {
-              await loginWithDemo('tpo');
-              navigate('/placement/dashboard');
-            }}
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.2)',
-              color: '#FFFFFF',
-              borderRadius: '6px',
-              padding: '3px 8px',
-              cursor: 'pointer',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-            }}
-          >
-            💼 Placement
-          </button>
           <button
             onClick={handleLogout}
             style={{
@@ -828,30 +758,10 @@ export default function StudentDashboard() {
               <h1 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0F172A', lineHeight: 1.2 }}>
                 {activeTab === 'cockpit' ? 'Personal Student Success Cockpit' : 'Student Task & Mentoring Action Center'}
               </h1>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+              <div style={{ marginTop: '2px' }}>
                 <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
                   {studentData?.year || '3rd Year'} • {studentData?.department || 'B.Tech Computer Science & Engineering'} • Semester {studentData?.semester || 6}
                 </span>
-                <button
-                  type="button"
-                  onClick={handleOpenEditProfile}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    border: '1px solid #CBD5E1',
-                    backgroundColor: '#FFFFFF',
-                    color: '#1E6BFF',
-                    fontSize: '0.72rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <Edit3 size={11} />
-                  <span>Edit Program</span>
-                </button>
               </div>
             </div>
 
@@ -1129,9 +1039,6 @@ export default function StudentDashboard() {
                         <span style={{ fontSize: '0.72rem', color: '#10B981', fontWeight: 600 }}>● Telemetry Grounded</span>
                       </div>
                     </div>
-                    <span style={{ fontSize: '0.72rem', color: '#64748B', backgroundColor: '#F8FAFC', padding: '2px 8px', borderRadius: '4px', border: '1px solid #E2E8F0' }}>
-                      Gemini 2.5 Flash
-                    </span>
                   </div>
 
                   {/* Conversation Log */}
